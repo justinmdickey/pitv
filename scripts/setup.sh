@@ -47,13 +47,25 @@ echo "Project dir:  $PROJECT_DIR"
 echo "Boot config:  $BOOT_CONFIG"
 echo ""
 
-# Step 1: Install VLC
-echo "[1/5] Installing VLC..."
+# Step 1: Install mplayer
+echo "[1/6] Installing mplayer..."
 apt-get update -qq
-apt-get install -y -qq vlc-bin vlc-plugin-base vlc-plugin-video-output
+apt-get install -y -qq mplayer
 
-# Step 2: Append boot config
-echo "[2/5] Configuring composite video output..."
+# Step 2: Disable KMS driver (required for composite output)
+echo "[2/6] Disabling KMS video driver for composite support..."
+if grep -q "^dtoverlay=vc4-kms-v3d" "$BOOT_CONFIG" 2>/dev/null; then
+    sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d  # Disabled by PiTV (composite requires firmware driver)/' "$BOOT_CONFIG"
+    echo "  Commented out dtoverlay=vc4-kms-v3d"
+elif grep -q "^dtoverlay=vc4-fkms-v3d" "$BOOT_CONFIG" 2>/dev/null; then
+    sed -i 's/^dtoverlay=vc4-fkms-v3d/#dtoverlay=vc4-fkms-v3d  # Disabled by PiTV (composite requires firmware driver)/' "$BOOT_CONFIG"
+    echo "  Commented out dtoverlay=vc4-fkms-v3d"
+else
+    echo "  KMS overlay already disabled or not found."
+fi
+
+# Step 3: Append boot config
+echo "[3/6] Configuring composite video output..."
 MARKER="# --- PiTV Composite Output ---"
 if grep -qF "$MARKER" "$BOOT_CONFIG" 2>/dev/null; then
     echo "  Boot config already applied, skipping."
@@ -63,23 +75,29 @@ else
     echo "  Appended PiTV settings to $BOOT_CONFIG"
 fi
 
-# Step 3: Force audio to analog output
-echo "[3/5] Configuring audio output..."
+# Step 4: Force audio to analog output
+echo "[4/6] Configuring audio output..."
 amixer cset numid=3 1 2>/dev/null || echo "  Warning: Could not set audio output (may need reboot)"
 
-# Step 4: Install and enable systemd service
-echo "[4/5] Installing systemd service..."
-cp "$PROJECT_DIR/systemd/pitv.service" /etc/systemd/system/pitv.service
+# Detect the real user (not root)
+PI_USER=$(logname 2>/dev/null || echo "pi")
+PI_HOME=$(eval echo "~$PI_USER")
+
+# Step 5: Install and enable systemd service
+echo "[5/6] Installing systemd service..."
+sed -e "s|__USER__|$PI_USER|g" -e "s|__HOME__|$PI_HOME|g" \
+    "$PROJECT_DIR/systemd/pitv.service" > /etc/systemd/system/pitv.service
 systemctl daemon-reload
 systemctl enable pitv.service
-echo "  Service installed and enabled."
+echo "  Service installed for user: $PI_USER"
 
-# Step 5: Create videos directory
-echo "[5/5] Preparing videos directory..."
+# Update config with actual home path
+sed -i "s|__HOME__|$PI_HOME|g" "$PROJECT_DIR/config/pitv.conf"
+
+# Step 6: Create videos directory
+echo "[6/6] Preparing videos directory..."
 VIDEOS_DIR="$PROJECT_DIR/videos"
 mkdir -p "$VIDEOS_DIR"
-# Ensure the pi user owns the videos directory
-PI_USER=$(logname 2>/dev/null || echo "pi")
 chown -R "$PI_USER:$PI_USER" "$VIDEOS_DIR"
 
 # Optional: Enable read-only filesystem

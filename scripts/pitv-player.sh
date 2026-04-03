@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PiTV Player — Loops video files on composite output via VLC
+# PiTV Player — Loops video files on composite output via mplayer
 # Designed for Raspberry Pi Zero + Casio TV-880B
 
 set -euo pipefail
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF_FILE="${SCRIPT_DIR}/../config/pitv.conf"
 
 # Defaults (overridden by pitv.conf)
-VIDEO_DIR="/home/pi/pitv/videos"
+VIDEO_DIR="$HOME/pitv/videos"
 VIDEO_EXTENSIONS="mp4 mkv avi m4v"
 SHUFFLE=false
 RESTART_DELAY=3
@@ -49,9 +49,9 @@ build_playlist() {
 # Clean shutdown on SIGTERM
 cleanup() {
     log "Received shutdown signal, stopping playback"
-    if [[ -n "${VLC_PID:-}" ]] && kill -0 "$VLC_PID" 2>/dev/null; then
-        kill "$VLC_PID" 2>/dev/null || true
-        wait "$VLC_PID" 2>/dev/null || true
+    if [[ -n "${PLAYER_PID:-}" ]] && kill -0 "$PLAYER_PID" 2>/dev/null; then
+        kill "$PLAYER_PID" 2>/dev/null || true
+        wait "$PLAYER_PID" 2>/dev/null || true
     fi
     exit 0
 }
@@ -59,7 +59,7 @@ trap cleanup SIGTERM SIGINT
 
 log "PiTV player starting"
 
-# Main loop — restarts VLC if it exits
+# Main loop — restarts mplayer if it exits
 while true; do
     PLAYLIST=$(build_playlist) || {
         log "No video files found in $VIDEO_DIR — retrying in ${NO_VIDEO_RETRY}s"
@@ -70,22 +70,23 @@ while true; do
     FILE_COUNT=$(echo "$PLAYLIST" | wc -l)
     log "Found $FILE_COUNT video file(s), starting playback"
 
-    # Launch VLC in headless mode
-    # shellcheck disable=SC2086
-    /usr/bin/cvlc \
-        --fullscreen \
-        --loop \
-        --no-video-title-show \
-        --no-osd \
-        --aout=alsa \
-        --quiet \
-        $PLAYLIST &
-    VLC_PID=$!
+    # Play each file in sequence, then loop
+    while IFS= read -r file; do
+        log "Playing: $(basename "$file")"
 
-    # Wait for VLC to exit
-    wait "$VLC_PID" || true
-    VLC_PID=""
+        /usr/bin/mplayer \
+            -vo fbdev:/dev/fb0 \
+            -vf scale=720:480 \
+            -nosound \
+            -really-quiet \
+            -slave \
+            "$file" &
+        PLAYER_PID=$!
 
-    log "Player exited, restarting in ${RESTART_DELAY}s"
+        wait "$PLAYER_PID" || true
+        PLAYER_PID=""
+    done <<< "$PLAYLIST"
+
+    log "Playlist complete, looping"
     sleep "$RESTART_DELAY"
 done
