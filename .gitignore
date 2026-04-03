@@ -1,0 +1,9 @@
+# Video files (too large for git)
+videos/*.mp4
+videos/*.mkv
+videos/*.avi
+videos/*.m4v
+
+# OS artifacts
+.DS_Store
+Thumbs.db

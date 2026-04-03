@@ -1,0 +1,20 @@
+[Unit]
+Description=PiTV Video Looper
+After=multi-user.target sound.target
+Wants=sound.target
+
+[Service]
+Type=simple
+User=pi
+Environment=HOME=/home/pi
+ExecStartPre=/bin/sleep 5
+ExecStart=/home/pi/pitv/scripts/pitv-player.sh
+Restart=always
+RestartSec=5
+Nice=-5
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

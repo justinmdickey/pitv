@@ -1,0 +1,22 @@
+# --- PiTV Composite Output ---
+# Append these lines to /boot/firmware/config.txt (Bookworm)
+# or /boot/config.txt (Bullseye)
+# The setup script handles this automatically.
+
+# Enable composite video output on Pi Zero (disables HDMI)
+enable_tvout=1
+
+# NTSC standard (required for Casio TV-880B)
+sdtv_mode=0
+
+# 4:3 aspect ratio
+sdtv_aspect=1
+
+# GPU memory for hardware video decode
+gpu_mem=64
+
+# Disable splash screen for faster boot
+disable_splash=1
+
+# Disable Bluetooth to save power (Pi Zero 2 W)
+dtoverlay=disable-bt
